@@ -1,0 +1,26 @@
+A forma sem a função auxiliar seria mais performática.
+
+Vamos analisar a sua versão original, que é mais eficiente em termos de desempenho:
+
+Python
+
+# Sua versão original (mais performática)
+fat_pis = receita[receita['CO_FONTE_RECURSO'].isin(["40", "040", "041"])].groupby('ID_ANO').agg(
+    VA_RECEITA_ORC_LIQ_SALDO=('VA_RECEITA_ORC_LIQ_SALDO', 'sum'),
+    VA_PREV_ATU_RECEITA_SALDO=('VA_PREV_ATU_RECEITA_SALDO', 'sum')
+).reset_index()
+
+fat_pis['pis'] = fat_pis.apply(
+    lambda x: x['VA_RECEITA_ORC_LIQ_SALDO'] if x['ID_ANO'] != ano_corrente else x['VA_PREV_ATU_RECEITA_SALDO'], axis=1
+)
+Por que essa abordagem é mais rápida?
+Agregação Otimizada: O groupby().agg() é uma operação vetorizada do pandas, que é muito rápida. Ela soma os valores de todas as colunas de uma só vez, usando as otimizações internas do pandas. Essa é a parte mais pesada do cálculo, e você a executa de forma otimizada.
+
+apply() em um DataFrame Pequeno: O apply() é aplicado em um DataFrame fat_pis que já foi reduzido a apenas uma linha por ano. Nesse ponto, o apply() é extremamente rápido, pois tem pouquíssimas linhas para processar.
+
+A abordagem com a função auxiliar, embora legível, força o pandas a fazer um loop interno sobre cada grupo e aplicar a lógica de soma separadamente. A sua abordagem original, por outro lado, usa a eficiência da agregação vetorizada e só depois aplica a lógica condicional em um conjunto de dados já pequeno.
+
+Para este caso, a sua versão original é a melhor em termos de desempenho.
+
+
+https://g.co/gemini/share/e50ea8a1cd78

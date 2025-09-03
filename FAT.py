@@ -18,20 +18,13 @@ def formatar_colunas_para_decimal(df, colunas):
     return df
 
 def converter_colunas_para_string(df, colunas_para_converter):
-    """
-    Converte uma lista de colunas de um DataFrame para o tipo string,
-    primeiro convertendo para Int64 para lidar com NaNs e depois para str.
-
-    Args:
-        df (pd.DataFrame): O DataFrame a ser modificado.
-        colunas_para_converter (list): Uma lista de strings com os nomes das colunas.
-
-    Returns:
-        pd.DataFrame: O DataFrame com as colunas convertidas.
-    """
-    for coluna in colunas_para_converter:
-        if coluna in df.columns:
-            df[coluna] = df[coluna].astype("Int64").astype(str)
+    
+    # Transformar todas em texto e remover a aspa inicial inserida no Power Query
+    
+    for col in colunas_para_converter:
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.lstrip("'")
+    
     return df
 
 
@@ -43,11 +36,13 @@ df_receita = df[df["Origem"] == "Receita_anual"].drop(columns=["Origem"])
 df_despesa = df[df["Origem"] == "Despesa_anual"].drop(columns=["Origem"])
 
 
+
 # Converte colunas para string
-colunas_receita = ['ID_ANO', 'ID_UO', 'CO_UO', 'CO_NATUREZA_RECEITA2', 'CO_FONTE_SOF','ID_GRUPO_FONTE', 'ID_FONTE_RECURSO', 'CO_FONTE_RECURSO', 'ID_ESFERA_ORCAMENTARIA', 'CO_RESULTADO_PRIMARIO']
+
+colunas_receita = ["ID_ANO","ID_UO","CO_UO","CO_NATUREZA_RECEITA2","CO_FONTE_SOF","ID_GRUPO_FONTE","ID_FONTE_RECURSO","CO_FONTE_RECURSO","ID_ESFERA_ORCAMENTARIA","CO_RESULTADO_PRIMARIO"]
 df_receita = converter_colunas_para_string(df_receita, colunas_receita)
 
-colunas_despesa = ['ID_ANO', 'CO_UO', 'CO_FUNCAO', 'CO_SUBFUNCAO', 'CO_PROGRAMA', 'CO_ESFERA', 'CO_RESULTADO_PRIMARIO', 'CO_ELEMENTO_DESPESA', 'CO_FONTE', 'ID_FONTE', 'CO_FONTE_RECURSO']
+colunas_despesa = ["ID_ANO","CO_FONTE_SOF","CO_UO","CO_FUNCAO","CO_SUBFUNCAO","CO_PROGRAMA","CO_ACAO","CO_PO","CO_ESFERA","CO_RESULTADO_PRIMARIO","CO_ELEMENTO_DESPESA","ID_FONTE","CO_FONTE_RECURSO"]
 df_despesa = converter_colunas_para_string(df_despesa, colunas_despesa)
 
 
@@ -78,15 +73,26 @@ ano_corrente = datetime.now().year
 
 ############################ RECEITAS FAT ############################################################
 
-# Agrupa as receitas do FAT e calcula a receita de PIS/PASEP
-fat_pis = receita[receita['CO_FONTE_RECURSO'].isin(["40", "040", "041"])].groupby('ID_ANO').agg(
-    VA_RECEITA_ORC_LIQ_SALDO=('VA_RECEITA_ORC_LIQ_SALDO', 'sum'),
-    VA_PREV_ATU_RECEITA_SALDO=('VA_PREV_ATU_RECEITA_SALDO', 'sum')
-).reset_index()
-# Aplica a lógica condicional para criar a coluna 'pis'
-fat_pis['pis'] = fat_pis.apply(
-    lambda x: x['VA_RECEITA_ORC_LIQ_SALDO'] if x['ID_ANO'] != ano_corrente else x['VA_PREV_ATU_RECEITA_SALDO'], axis=1
-)
+
+# Filtra as receitas do FAT PIS por fonte de recurso
+# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
+# De->Para
+# 040 -> 0140
+# 40 -> 1040
+# 041 -> 1041  
+fat_pis_temp = receita[receita['CO_FONTE_SOF'].isin(["1040", "0140", "1041"])].copy()
+
+# Cria a função auxiliar para ser usada no .apply()
+def calcular_fat_pis(g):
+    if g.name != ano_corrente:
+        # Lógica para anos anteriores
+        return g['VA_RECEITA_ORC_LIQ_SALDO'].sum(skipna=True)
+    else:
+        # Lógica para o ano corrente
+        return g['VA_PREV_ATU_RECEITA_SALDO'].sum(skipna=True)
+
+# Agrupa por ano e aplica a função para calcular o PIS/PASEP
+fat_pis = fat_pis_temp.groupby('ID_ANO').apply(calcular_fat_pis).reset_index(name='pis')
 
 # O resultado final é o DataFrame com a coluna 'pis'
 fat_pis = fat_pis[['ID_ANO', 'pis']]
@@ -106,9 +112,13 @@ receita_antigo = df_filtrado[
 ).reset_index()
 
 # 2. Agrega a receita para o ano corrente
+# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
+# De->Para
+# 000 -> 1000
+
 receita_corrente = df_filtrado[
     (df_filtrado['ID_ANO'] == str(ano_corrente)) & 
-    (df_filtrado['CO_FONTE_RECURSO'] != "000") & 
+    (df_filtrado['CO_FONTE_SOF'] != "1000") & 
     (df_filtrado['CO_NATUREZA_RECEITA2'].str.startswith(("1321", "164")))
 ].groupby('ID_ANO').agg(
     financeira=('VA_PREV_ATU_RECEITA_SALDO', 'sum')
@@ -123,12 +133,18 @@ fat_financeira = pd.concat([receita_antigo, receita_corrente], ignore_index=True
 demais_receitas_temp = receita[receita['CO_UO'].isin(["25915", "38901", "40901"])].copy()
 
 # ---- Cria a coluna 'demais' conforme condições ----
+# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
+# De->Para
+# 040 -> 0140
+# 40 -> 1040
+# 041 -> 1041 
+# 000 -> 1000 
 def calcular_demais(g):
     if g.name != ano_corrente:
-        mask = (g['CO_RESULTADO_PRIMARIO'] != "0") & (~g['CO_FONTE_RECURSO'].isin(["40", "040", "041"]))
+        mask = (g['CO_RESULTADO_PRIMARIO'] != "0") & (~g['CO_FONTE_SOF'].isin(["1040", "0140", "1041"]))
         return g.loc[mask, 'VA_RECEITA_ORC_LIQ_SALDO'].sum(skipna=True)
     else:
-        mask = (~g['CO_FONTE_RECURSO'].isin(["40", "040", "041", "000"])) & \
+        mask = (~g['CO_FONTE_SOF'].isin(["1040", "0140", "1041", "1000"])) & \
                (~g['CO_NATUREZA_RECEITA2'].astype(str).str.startswith(("1321", "164")))
         return g.loc[mask, 'VA_PREV_ATU_RECEITA_SALDO'].sum(skipna=True)
 
@@ -139,14 +155,23 @@ demais_receitas = demais_receitas_temp.groupby('ID_ANO').apply(calcular_demais).
 # Junta aportes do Tesouro
 # FUNÇÃO: get_valor_coluna
 # Esta função aplica a lógica condicional para selecionar a coluna correta
+# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
+# De->Para
+# 000 -> 1000 
 def get_valor_coluna(df, coluna_antigo, coluna_novo):
     return np.where(df['ID_ANO'].astype(int) != ano_corrente, df[coluna_antigo], df[coluna_novo])
 
-fter_excluir = set(receita[receita['CO_UO'].isin(["25915", "38901", "40901"]) & (receita['CO_FONTE_RECURSO'] != "000")]['CO_FONTE_RECURSO'].unique())
-fter_incluir = set(despesa[despesa['CO_UO'].isin(["25915", "38901", "40901"])]['CO_FONTE_RECURSO'].unique()) - fter_excluir
+fter_excluir = set(receita[receita['CO_UO'].isin(["25915", "38901", "40901"]) & (receita['CO_FONTE_SOF'] != "1000")]['CO_FONTE_SOF'].unique())
+fter_incluir = set(despesa[despesa['CO_UO'].isin(["25915", "38901", "40901"])]['CO_FONTE_SOF'].unique()) - fter_excluir
+
+# Transformar fter_excluir em DataFrame
+df_fter_excluir = pd.DataFrame(sorted(fter_excluir), columns=["CO_FONTE_SOF"])
+
+# Transformar fter_incluir em DataFrame
+df_fter_incluir = pd.DataFrame(sorted(fter_incluir), columns=["CO_FONTE_SOF"])
 
 aportes_tesouro_temp = despesa[
-    despesa['CO_UO'].isin(["25915", "38901", "40901"]) & despesa['CO_FONTE_RECURSO'].isin(fter_incluir)
+    despesa['CO_UO'].isin(["25915", "38901", "40901"]) & despesa['CO_FONTE_SOF'].isin(fter_incluir)
 ].copy()
 aportes_tesouro_temp['tesouro'] = get_valor_coluna(aportes_tesouro_temp, 'VLR_PAGAMENTOS_TOTAIS', 'VLR_AUTORIZADO')
 aportes_tesouro = aportes_tesouro_temp.groupby('ID_ANO')['tesouro'].sum().reset_index()
@@ -169,9 +194,15 @@ fat["receita"] = fat['pis'] + fat['financeira'] + fat['demais'] + fat['tesouro']
 # --- Processamento das despesas do RGPS ---
 
 # 1. Filtra as despesas do RGPS por UO e fonte de recurso
+# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
+# De->Para
+# 040 -> 0140
+# 40 -> 1040
+# 041 -> 1041 
+
 fat_despesa_rgps = despesa[
     (despesa['CO_UO'].isin(["25917", "33904", "40904", "55902", "93102"])) &
-    (despesa['CO_FONTE_RECURSO'].isin(["40", "040", "041"]))
+    (despesa['CO_FONTE_SOF'].isin(["1040", "0140", "1041"]))
 ].copy()
 
 # 2. Agrega as despesas por ano, separando as colunas de valor
@@ -287,6 +318,11 @@ receita_rgps_temp = receita[
 ].copy()
 
 # Cria a função para ser usada no .apply()
+# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
+# De->Para
+# 444 -> 1444
+# 444 -> 9444 (Qual dos dois???)
+ 
 def calcular_receita_rgps(g):
     if g.name != ano_corrente:
         # Lógica para anos anteriores
@@ -294,7 +330,7 @@ def calcular_receita_rgps(g):
         return g.loc[mask, 'VA_RECEITA_ORC_LIQ_SALDO'].sum(skipna=True)
     else:
         # Lógica para o ano corrente
-        mask = (~g['CO_NATUREZA_RECEITA2'].str.startswith("1321")) & (g['CO_FONTE_RECURSO'] != "444")
+        mask = (~g['CO_NATUREZA_RECEITA2'].str.startswith("1321")) & (g['CO_FONTE_SOF'] != "1444")
         return g.loc[mask, 'VA_PREV_ATU_RECEITA_SALDO'].sum(skipna=True)
 
 # Agrupa por ano e aplica a função para calcular a receita do RGPS
