@@ -80,7 +80,7 @@ ano_corrente = datetime.now().year
 # 040 -> 0140
 # 40 -> 1040
 # 041 -> 1041  
-fat_pis_temp = receita[receita['CO_FONTE_SOF'].isin(["1040", "0140", "1041"])].copy()
+fat_pis_temp = receita[receita['CO_FONTE_RECURSO'].isin(["040", "40", "041"])].copy()
 
 # Cria a função auxiliar para ser usada no .apply()
 def calcular_fat_pis(g):
@@ -118,7 +118,7 @@ receita_antigo = df_filtrado[
 
 receita_corrente = df_filtrado[
     (df_filtrado['ID_ANO'] == str(ano_corrente)) & 
-    (df_filtrado['CO_FONTE_SOF'] != "1000") & 
+    (df_filtrado['CO_FONTE_RECURSO'] != "000") & 
     (df_filtrado['CO_NATUREZA_RECEITA2'].str.startswith(("1321", "164")))
 ].groupby('ID_ANO').agg(
     financeira=('VA_PREV_ATU_RECEITA_SALDO', 'sum')
@@ -141,10 +141,10 @@ demais_receitas_temp = receita[receita['CO_UO'].isin(["25915", "38901", "40901"]
 # 000 -> 1000 
 def calcular_demais(g):
     if g.name != ano_corrente:
-        mask = (g['CO_RESULTADO_PRIMARIO'] != "0") & (~g['CO_FONTE_SOF'].isin(["1040", "0140", "1041"]))
+        mask = (g['CO_RESULTADO_PRIMARIO'] != "0") & (~g['CO_FONTE_RECURSO'].isin(["040", "40", "041"]))
         return g.loc[mask, 'VA_RECEITA_ORC_LIQ_SALDO'].sum(skipna=True)
     else:
-        mask = (~g['CO_FONTE_SOF'].isin(["1040", "0140", "1041", "1000"])) & \
+        mask = (~g['CO_FONTE_RECURSO'].isin(["040", "40", "041", "000"])) & \
                (~g['CO_NATUREZA_RECEITA2'].astype(str).str.startswith(("1321", "164")))
         return g.loc[mask, 'VA_PREV_ATU_RECEITA_SALDO'].sum(skipna=True)
 
@@ -161,17 +161,17 @@ demais_receitas = demais_receitas_temp.groupby('ID_ANO').apply(calcular_demais).
 def get_valor_coluna(df, coluna_antigo, coluna_novo):
     return np.where(df['ID_ANO'].astype(int) != ano_corrente, df[coluna_antigo], df[coluna_novo])
 
-fter_excluir = set(receita[receita['CO_UO'].isin(["25915", "38901", "40901"]) & (receita['CO_FONTE_SOF'] != "1000")]['CO_FONTE_SOF'].unique())
-fter_incluir = set(despesa[despesa['CO_UO'].isin(["25915", "38901", "40901"])]['CO_FONTE_SOF'].unique()) - fter_excluir
+fter_excluir = set(receita[receita['CO_UO'].isin(["25915", "38901", "40901"]) & (receita['CO_FONTE_RECURSO'] != "000")]['CO_FONTE_RECURSO'].unique())
+fter_incluir = set(despesa[despesa['CO_UO'].isin(["25915", "38901", "40901"])]['CO_FONTE_RECURSO'].unique()) - fter_excluir
 
 # Transformar fter_excluir em DataFrame
-df_fter_excluir = pd.DataFrame(sorted(fter_excluir), columns=["CO_FONTE_SOF"])
+df_fter_excluir = pd.DataFrame(sorted(fter_excluir), columns=["CO_FONTE_RECURSO"])
 
 # Transformar fter_incluir em DataFrame
-df_fter_incluir = pd.DataFrame(sorted(fter_incluir), columns=["CO_FONTE_SOF"])
+df_fter_incluir = pd.DataFrame(sorted(fter_incluir), columns=["CO_FONTE_RECURSO"])
 
 aportes_tesouro_temp = despesa[
-    despesa['CO_UO'].isin(["25915", "38901", "40901"]) & despesa['CO_FONTE_SOF'].isin(fter_incluir)
+    despesa['CO_UO'].isin(["25915", "38901", "40901"]) & despesa['CO_FONTE_RECURSO'].isin(fter_incluir)
 ].copy()
 aportes_tesouro_temp['tesouro'] = get_valor_coluna(aportes_tesouro_temp, 'VLR_PAGAMENTOS_TOTAIS', 'VLR_AUTORIZADO')
 aportes_tesouro = aportes_tesouro_temp.groupby('ID_ANO')['tesouro'].sum().reset_index()
@@ -202,7 +202,7 @@ fat["receita"] = fat['pis'] + fat['financeira'] + fat['demais'] + fat['tesouro']
 
 fat_despesa_rgps = despesa[
     (despesa['CO_UO'].isin(["25917", "33904", "40904", "55902", "93102"])) &
-    (despesa['CO_FONTE_SOF'].isin(["1040", "0140", "1041"]))
+    (despesa['CO_FONTE_RECURSO'].isin(["040", "40", "041"]))
 ].copy()
 
 # 2. Agrega as despesas por ano, separando as colunas de valor
@@ -330,7 +330,7 @@ def calcular_receita_rgps(g):
         return g.loc[mask, 'VA_RECEITA_ORC_LIQ_SALDO'].sum(skipna=True)
     else:
         # Lógica para o ano corrente
-        mask = (~g['CO_NATUREZA_RECEITA2'].str.startswith("1321")) & (g['CO_FONTE_SOF'] != "1444")
+        mask = (~g['CO_NATUREZA_RECEITA2'].str.startswith("1321")) & (g['CO_FONTE_RECURSO'] != "444")
         return g.loc[mask, 'VA_PREV_ATU_RECEITA_SALDO'].sum(skipna=True)
 
 # Agrupa por ano e aplica a função para calcular a receita do RGPS
