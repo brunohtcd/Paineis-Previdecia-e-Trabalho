@@ -64,7 +64,7 @@ receita = df_receita
 despesa = df_despesa
 
 # Obtém o ano corrente
-ano_corrente = datetime.now().year
+ano_corrente = str(datetime.now().year)
 
 
 # ----------------------------------
@@ -75,11 +75,7 @@ ano_corrente = datetime.now().year
 
 
 # Filtra as receitas do FAT PIS por fonte de recurso
-# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
-# De->Para
-# 040 -> 0140
-# 40 -> 1040
-# 041 -> 1041  
+ 
 fat_pis_temp = receita[receita['CO_FONTE_RECURSO'].isin(["040", "40", "041"])].copy()
 
 # Cria a função auxiliar para ser usada no .apply()
@@ -105,19 +101,16 @@ df_filtrado = receita[receita['CO_UO'].isin(["25915", "38901", "40901"])].copy()
 
 # 1. Agrega a receita para anos anteriores ao ano corrente
 receita_antigo = df_filtrado[
-    (df_filtrado['ID_ANO'] != str(ano_corrente)) & 
+    (df_filtrado['ID_ANO'] != ano_corrente) & 
     (df_filtrado['CO_RESULTADO_PRIMARIO'] == "0")
 ].groupby('ID_ANO').agg(
     financeira=('VA_RECEITA_ORC_LIQ_SALDO', 'sum')
 ).reset_index()
 
 # 2. Agrega a receita para o ano corrente
-# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
-# De->Para
-# 000 -> 1000
 
 receita_corrente = df_filtrado[
-    (df_filtrado['ID_ANO'] == str(ano_corrente)) & 
+    (df_filtrado['ID_ANO'] == ano_corrente) & 
     (df_filtrado['CO_FONTE_RECURSO'] != "000") & 
     (df_filtrado['CO_NATUREZA_RECEITA2'].str.startswith(("1321", "164")))
 ].groupby('ID_ANO').agg(
@@ -133,12 +126,7 @@ fat_financeira = pd.concat([receita_antigo, receita_corrente], ignore_index=True
 demais_receitas_temp = receita[receita['CO_UO'].isin(["25915", "38901", "40901"])].copy()
 
 # ---- Cria a coluna 'demais' conforme condições ----
-# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
-# De->Para
-# 040 -> 0140
-# 40 -> 1040
-# 041 -> 1041 
-# 000 -> 1000 
+
 def calcular_demais(g):
     if g.name != ano_corrente:
         mask = (g['CO_RESULTADO_PRIMARIO'] != "0") & (~g['CO_FONTE_RECURSO'].isin(["040", "40", "041"]))
@@ -155,9 +143,7 @@ demais_receitas = demais_receitas_temp.groupby('ID_ANO').apply(calcular_demais).
 # Junta aportes do Tesouro
 # FUNÇÃO: get_valor_coluna
 # Esta função aplica a lógica condicional para selecionar a coluna correta
-# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
-# De->Para
-# 000 -> 1000 
+
 def get_valor_coluna(df, coluna_antigo, coluna_novo):
     return np.where(df['ID_ANO'].astype(int) != ano_corrente, df[coluna_antigo], df[coluna_novo])
 
@@ -194,11 +180,6 @@ fat["receita"] = fat['pis'] + fat['financeira'] + fat['demais'] + fat['tesouro']
 # --- Processamento das despesas do RGPS ---
 
 # 1. Filtra as despesas do RGPS por UO e fonte de recurso
-# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
-# De->Para
-# 040 -> 0140
-# 40 -> 1040
-# 041 -> 1041 
 
 fat_despesa_rgps = despesa[
     (despesa['CO_UO'].isin(["25917", "33904", "40904", "55902", "93102"])) &
@@ -290,13 +271,13 @@ fat_total_desp['despesa'] = fat_total_desp.apply(
     lambda x: x['pagamentos_totais'] if x['ID_ANO'] != ano_corrente else x['autorizado'], axis=1
 )
 
-fat_total_desp = fat_total_desp[['ID_ANO', 'pagamentos_totais']]
+fat_total_desp = fat_total_desp[['ID_ANO', 'despesa']]
 fat = fat.merge(fat_total_desp, on='ID_ANO', how='left')
 
 
 # Calcula os resultados econômico e nominal do FAT
-fat["economico"] = fat["rec_fat"] - fat["pagamentos_totais"] + fat["bndes"]
-fat["nominal"] = fat["rec_fat"] - fat["pagamentos_totais"]
+fat["economico"] = fat["rec_fat"] - fat["despesa"] + fat["bndes"]
+fat["nominal"] = fat["rec_fat"] - fat["despesa"]
 
 ############################ FIM DESPESAS FAT ############################################################
 
@@ -318,10 +299,6 @@ receita_rgps_temp = receita[
 ].copy()
 
 # Cria a função para ser usada no .apply()
-# Uilizando CO_FONTE_SOF ao invés de CO_FONTE_RECURSO
-# De->Para
-# 444 -> 1444
-# 444 -> 9444 (Qual dos dois???)
  
 def calcular_receita_rgps(g):
     if g.name != ano_corrente:

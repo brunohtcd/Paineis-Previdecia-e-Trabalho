@@ -1,0 +1,1 @@
+SELECT * FROM USR_DW_TESOUROGERENCIAL.wf_receita_pivot
