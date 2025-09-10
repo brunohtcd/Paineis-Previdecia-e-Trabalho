@@ -34,6 +34,7 @@ df = dataset
 # Separa de volta cada consulta
 df_receita = df[df["Origem"] == "Receita_anual"].drop(columns=["Origem"])
 df_despesa = df[df["Origem"] == "Despesa_anual"].drop(columns=["Origem"])
+df_pib     = df[df["Origem"] == "PIB_Bacen"].drop(columns=["Origem"])
 
 
 
@@ -50,6 +51,8 @@ df_despesa = converter_colunas_para_string(df_despesa, colunas_despesa)
 df_receita = df_receita.dropna(axis=1, how='all')
 # Remove as colunas em que todos os valores são nulos para a despesa
 df_despesa = df_despesa.dropna(axis=1, how='all')
+# Remove as colunas em que todos os valores são nulos para o pib
+df_pib     = df_pib.dropna(axis=1, how='all')
 
 # Colunas numericas do df_receita
 colunas_receita = ["VA_PREV_INI_RECEITA_SALDO","VA_PREV_ATU_RECEITA_SALDO","VA_RECEITA_ORC_BRUTA_SALDO","VA_DEDUCOES_RECEITA_SALDO","VA_RECEITA_ORC_LIQ_SALDO"]
@@ -60,8 +63,13 @@ colunas_despesa = ["VLR_DOTACAO_INICIAL","VLR_AUTORIZADO","VLR_EMPENHADO","VLR_L
 "VLR_RP_NAO_PROC_A_PAGAR", "VLR_RP_PROC_A_PAGAR","VLR_PAGAMENTOS_TOTAIS"  ]
 df_despesa = formatar_colunas_para_decimal(df_despesa, colunas_despesa)
 
+# Colunas numéricas do df_pib
+colunas_pib = ["valor"]
+df_pib = formatar_colunas_para_decimal(df_pib, colunas_pib)
+
 receita = df_receita
 despesa = df_despesa
+pib = df_pib
 
 # Obtém o ano corrente
 ano_corrente = str(datetime.now().year)
@@ -115,8 +123,14 @@ despesa_rgps = despesa_rgps_temp.groupby('ID_ANO').apply(calcular_despesa_rgps).
 
 rgps = rgps.merge(despesa_rgps, on='ID_ANO', how='left')
 
-# Calcula o déficit do RGPS como percentual do PIB
-rgps["deficit"] = ((rgps["despesa"] - rgps["receita"]) / 1) * 100
+# 4. Junta o PIB ao dataframe rgps
+rgps = rgps.merge(pib, on='ID_ANO', how='left')
+
+# Preenche PIB do ano corrente com o último valor conhecido
+rgps["pib"] = rgps["pib"].fillna(method="ffill")
+
+# 5. Calcula o déficit do RGPS como percentual do PIB
+rgps["deficit"] = ((rgps["despesa"] - rgps["receita"]) / rgps["pib"]) * 100
 
 
 # --- Processamento das Despesas com Benefícios Previdenciários ---
