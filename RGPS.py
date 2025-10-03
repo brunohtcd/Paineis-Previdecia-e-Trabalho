@@ -64,7 +64,7 @@ colunas_despesa = ["VLR_DOTACAO_INICIAL","VLR_AUTORIZADO","VLR_EMPENHADO","VLR_L
 df_despesa = formatar_colunas_para_decimal(df_despesa, colunas_despesa)
 
 # Colunas numéricas do df_pib
-colunas_pib = ["valor"]
+colunas_pib = ["pib"]
 df_pib = formatar_colunas_para_decimal(df_pib, colunas_pib)
 
 receita = df_receita
