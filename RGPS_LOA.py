@@ -431,7 +431,9 @@ rgps_loa = rgps_loa.rename(columns=colunas_renomeadas)
 
 # Lista de colunas numéricas que você quer formatar
 colunas_para_formatar = ["Previsão Inicial da Receita", "Previsão Atual da Receita", "Receita Realizada Líquida", "Pagamentos Totais", "Déficit", "Dotação Inicial","Dotação Atual","Liquidado", "Pago", "RAP Inscrito","RAP Pago","RAP Cancelado",
-                         "RAP a Pagar", "Aposentadorias e Pensões - Urbano (acum.)","Aposentadorias e Pensões - Urbano (mensal)","Aposentadorias e Pensões - Rural (acum.)","Aposentadorias e Pensões - Rural (mensal)"]
+                         "RAP a Pagar", "Aposentadorias e Pensões - Urbano (acum.)","Aposentadorias e Pensões - Urbano (mensal)","Aposentadorias e Pensões - Rural (acum.)","Aposentadorias e Pensões - Rural (mensal)","Demais Benefícios do RGPS - Urbano (acum.)",
+                        "Demais Benefícios do RGPS - Urbano (mensal)", "Demais Benefícios do RGPS - Rural (acum.)", "Demais Benefícios do RGPS - Rural (mensal)", "Compensação Previdenciária (acum.)", "Compensação Previdenciária (mensal)",
+                        "Despesas com Sentenças Judiciais (acum.)", "Despesas com Sentenças Judiciais (mensal)"]
 
 
 # Itera sobre a lista e converte cada coluna para string, substituindo o ponto pela vírgula
